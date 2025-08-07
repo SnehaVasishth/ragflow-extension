@@ -41,7 +41,7 @@ class Manager:
 
             # Create a temporary file path
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_file_path = temp_file.name
+                temp_file_path = temp_file.name + self.data.s3URL
 
             print(temp_file_path, self.data.s3URL)
             # Download file from S3 using download_file_from_s3
@@ -50,8 +50,6 @@ class Manager:
             chunks = self.main(temp_file_path)
 
             return {
-                "grounding_metadata": "grounding_metadata",
-                "usage": "final_usage",
                 "chunks": chunks,
             }
 
@@ -59,7 +57,6 @@ class Manager:
             logger.error(f"Error in process_chunks: {str(e)}")
             return {
                 "message": "Error in process_chunks",
-                "usage": "final_usage",
                 "summary": str(e),
             }
 
@@ -163,4 +160,6 @@ class Manager:
 
         self.save_chunks(chunks, output_file)
 
-        return chunks
+        filtered_chunks = [{"content_with_weight": c["content_with_weight"]} for c in chunks if "content_with_weight" in c]
+
+        return filtered_chunks
