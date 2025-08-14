@@ -24,7 +24,8 @@ from typing import Any
 import json_repair
 
 from agent.tools.base import LLMToolPluginCallSession, ToolParamBase, ToolBase, ToolMeta
-from api.db.services.llm_service import LLMBundle, TenantLLMService
+from api.db.services.llm_service import LLMBundle
+from api.db.services.tenant_llm_service import TenantLLMService
 from api.db.services.mcp_server_service import MCPServerService
 from api.utils.api_utils import timeout
 from rag.prompts import message_fit_in
@@ -165,7 +166,7 @@ class Agent(LLM, ToolBase):
         _, msg = message_fit_in([{"role": "system", "content": prompt}, *msg], int(self.chat_mdl.max_length * 0.97))
         use_tools = []
         ans = ""
-        for delta_ans, tk in self._react_with_tools_streamly(msg, use_tools):
+        for delta_ans, tk in self._react_with_tools_streamly(prompt, msg, use_tools):
             ans += delta_ans
 
         if ans.find("**ERROR**") >= 0:
@@ -185,7 +186,7 @@ class Agent(LLM, ToolBase):
         _, msg = message_fit_in([{"role": "system", "content": prompt}, *msg], int(self.chat_mdl.max_length * 0.97))
         answer_without_toolcall = ""
         use_tools = []
-        for delta_ans,_ in self._react_with_tools_streamly(msg, use_tools):
+        for delta_ans,_ in self._react_with_tools_streamly(prompt, msg, use_tools):
             if delta_ans.find("**ERROR**") >= 0:
                 if self.get_exception_default_value():
                     self.set_output("content", self.get_exception_default_value())
@@ -208,7 +209,7 @@ class Agent(LLM, ToolBase):
                                                   ]):
             yield delta_ans
 
-    def _react_with_tools_streamly(self, history: list[dict], use_tools):
+    def _react_with_tools_streamly(self, prompt, history: list[dict], use_tools):
         token_count = 0
         tool_metas = self.tool_meta
         hist = deepcopy(history)
@@ -221,7 +222,7 @@ class Agent(LLM, ToolBase):
 
         def use_tool(name, args):
             nonlocal hist, use_tools, token_count,last_calling,user_request
-            print(f"{last_calling=} == {name=}", )
+            logging.info(f"{last_calling=} == {name=}")
             # Summarize of function calling
             #if all([
             #    isinstance(self.toolcall_session.get_tool_obj(name), Agent),
@@ -275,7 +276,7 @@ class Agent(LLM, ToolBase):
             else:
                 hist.append({"role": "user", "content": content})
 
-        task_desc = analyze_task(self.chat_mdl, user_request, tool_metas)
+        task_desc = analyze_task(self.chat_mdl, prompt, user_request, tool_metas)
         self.callback("analyze_task", {}, task_desc)
         for _ in range(self._param.max_rounds + 1):
             response, tk = next_step(self.chat_mdl, hist, tool_metas, task_desc)

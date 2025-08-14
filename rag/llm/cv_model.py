@@ -60,7 +60,7 @@ class Base(ABC):
         if not images:
             return text
 
-        if isinstance(images, str):
+        if isinstance(images, str) or "bytes" in type(images).__name__:
             images = [images]
 
         pmpt = [{"type": "text", "text": text}]
@@ -372,6 +372,16 @@ class OllamaCV(Base):
         self.keep_alive = kwargs.get("ollama_keep_alive", int(os.environ.get("OLLAMA_KEEP_ALIVE", -1)))
         Base.__init__(self, **kwargs)
 
+
+    def _clean_img(self, img):
+        if not isinstance(img, str):
+            return img
+
+        #remove the header like "data/*;base64,"
+        if img.startswith("data:") and ";base64," in img:
+            img = img.split(";base64,")[1]
+        return img
+
     def _clean_conf(self, gen_conf):
         options = {}
         if "temperature" in gen_conf:
@@ -390,9 +400,12 @@ class OllamaCV(Base):
             hist.insert(0, {"role": "system", "content": system})
         if not images:
             return hist
+        temp_images = []
+        for img in images:
+            temp_images.append(self._clean_img(img))
         for his in hist:
             if his["role"] == "user":
-                his["images"] = images
+                his["images"] = temp_images
                 break
         return hist
 
