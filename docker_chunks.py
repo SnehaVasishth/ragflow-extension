@@ -28,7 +28,7 @@ def progress_callback(progress=None, msg="", **kwargs):
     else:
         print(f"Status: {msg}")
 
-def extract_chunks(pdf_path, method="paper", token_size=512, layout="DeepDOC",
+def extract_chunks(pdf_path, method="naive", token_size=512, layout="DeepDOC",
                   from_page=0, to_page=100000, language="English"):
     """Extract chunks directly using RAGFlow chunking methods"""
     # Read PDF
@@ -103,7 +103,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="RAGFlow Docker Chunker")
     parser.add_argument("pdf_path", help="Path to PDF file")
-    parser.add_argument("--method", default="paper", 
+    parser.add_argument("--method", default="naive", 
                        choices=["paper", "naive", "book", "laws", "manual"],
                        help="Chunking method")
     parser.add_argument("--tokens", type=int, default=512,
