@@ -17,10 +17,21 @@ from rag.app.naive import chunk as naive_chunk
 from rag.app.book import chunk as book_chunk
 from rag.app.laws import chunk as laws_chunk
 from rag.app.manual import chunk as manual_chunk
+from rag.app.presentation import chunk as ppt_chunk
+from rag.app.qa import chunk as qa_chunk
+from rag.app.table import chunk as table_chunk
+from rag.app.resume import chunk as resume_chunk
+from rag.app.picture import chunk as pic_chunk
+from rag.app.one import chunk as one_chunk
+from rag.app.email import chunk as email_chunk
+from rag.app.tag import chunk as tag_chunk
+
 
 import sys
 import os
 import json
+import time
+import hashlib
 
 class Manager:
 
@@ -94,7 +105,17 @@ class Manager:
             "naive": naive_chunk,
             "book": book_chunk,
             "laws": laws_chunk,
-            "manual": manual_chunk
+            "manual": manual_chunk,
+            "presentation":ppt_chunk,
+            "email":email_chunk,
+            "one":one_chunk,
+            "qa":qa_chunk,
+            "tag":tag_chunk,
+            "table":table_chunk,
+            "resume":resume_chunk,
+            "picture":pic_chunk,        
+            
+            
         }
 
         if method not in chunking_functions:
@@ -138,7 +159,7 @@ class Manager:
 
     def main(self, file_path):
         """Main function"""
-
+       
         if not os.path.exists(file_path):
             print(f"❌ File not found: {file_path}")
             return
@@ -159,7 +180,25 @@ class Manager:
             output_file = f"{base_name}_chunks.json"
 
         self.save_chunks(chunks, output_file)
+        formatted_chunks=[]
+        for i,chunk in enumerate (chunks):
+            content=chunk.get("content_with_weight","")
+            chunk_hash=hashlib.sha256(content.encode('utf-8')).hexdigest()
+            new_chunk={
+                "content":content,
+                "created":int(time.time()*1000),
+                "metaData":{
+                    "fileName":chunk.get("docnm_kwd", self.data.s3URL.split('/')[-1]),
+                    "file":f"https://s3.{os.getenv('ZBRAIN_S3_REGION')}.amazonaws.com/{os.getenv('ZBRAIN_S3_BUCKET_NAME')}/{self.data.s3URL}",
+                    "characters":len(content),
+                    "id":i,
+                    "hash":chunk_hash,
+                    "words":len(content.split()),
+                    "isActive":True,
+                    "knowledgeBaseImportId":self.data.s3URL.split('/')[-2]
+                }
+            }
+            formatted_chunks.append(new_chunk)
+        
 
-        filtered_chunks = [{"content_with_weight": c["content_with_weight"]} for c in chunks if "content_with_weight" in c]
-
-        return filtered_chunks
+        return formatted_chunks
