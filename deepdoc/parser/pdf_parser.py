@@ -117,7 +117,7 @@ class RAGFlowPdfParser:
             r"[\(（][零一二三四五六七八九十百]+[）\)]",
             r"[\(（][0-9]+[）\)]",
             r"[0-9]+(、|\.[　 ]|）|\.[^0-9./a-zA-Z_%><-]{4,})",
-            r"[0-9]+\.[0-9.]+(、|\.[ 　])",
+            r"[0-9]+\.[0-9.]+(、|\.[ 　 ])",
             r"[⚫•➢①② ]",
         ]
         return any([re.match(p, b["text"]) for p in proj_patt])
@@ -341,6 +341,7 @@ class RAGFlowPdfParser:
         logging.info(f"__ocr sorting {len(chars)} chars cost {timer() - start}s")
         start = timer()
         boxes_to_reg = []
+        
         img_np = np.array(img)
         for b in bxs:
             if not b["text"]:
