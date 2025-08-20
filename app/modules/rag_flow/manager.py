@@ -29,9 +29,11 @@ from rag.app.tag import chunk as tag_chunk
 
 import sys
 import os
+import re
 import json
 import time
 import hashlib
+from email.message import EmailMessage
 
 class Manager:
 
@@ -45,6 +47,42 @@ class Manager:
         self.tokens = data.chunkingTokenSize if data.chunkingTokenSize else 512
         self.layout = data.chunkingLayout if data.chunkingLayout else "DeepDOC"
         self.output = data.outputFile if data.outputFile else None
+        # self.kb_id=data.kb_id
+    def _convert_to_eml(self,original_filename,original_binary,callback):
+        text_chunks=one_chunk(filename=original_filename,binary=original_binary,callback=callback)
+        full_text="\n".join([c.get('content_with_weight','') for c in text_chunks])
+        from_addr=re.search(r"^\s*From\s*:\s*(.+)$", full_text, re.MULTILINE | re.IGNORECASE)
+        to_addr=re.search(r"^\s*To\s*:\s*(.+)$", full_text, re.MULTILINE | re.IGNORECASE)
+        subject=re.search(r"^\s*Subject\s*:\s*(.+)$", full_text, re.MULTILINE | re.IGNORECASE)
+        email_body=full_text
+        
+        try:
+            header_end_index=max(
+                (from_addr.end() if from_addr else -1),
+                (to_addr.end() if to_addr else -1),
+                (subject.end() if subject else -1)
+            )
+            if header_end_index!=-1:
+                body_start_index=full_text.find('\n\n',header_end_index)
+                
+                if body_start_index !=-1:
+                    email_body=full_text[body_start_index:].strip()
+        
+        except Exception:
+            pass
+        
+        msg=EmailMessage()
+        msg['Subject']= subject.group(1).strip() if subject else f"Converted: {original_filename}"
+        msg['From']= from_addr.group(1).strip() if from_addr else "sender@example.com"
+        msg['To']= to_addr.group(1).strip() if to_addr else "receiver@example.com"
+        msg.set_content(email_body, charset='utf-8')
+        
+        new_eml_filename= os.path.splitext(original_filename)[0] + ".eml"
+        eml_binary= msg.as_bytes()
+        print(f"✅ Conversion complete. New file: {new_eml_filename}")
+        return new_eml_filename,eml_binary
+
+        
 
 
     async def process_chunks(self):        
@@ -86,6 +124,9 @@ class Manager:
             binary = f.read()
 
         filename = os.path.basename(pdf_path)
+        
+        if method == 'email':
+            filename,binary= self._convert_to_eml(filename,binary,callback=self.progress_callback)
 
         # Create config - ONLY using parameters that exist in RAGFlow code
         # These are the only parameters used in paper.py line 147-150
@@ -120,6 +161,8 @@ class Manager:
 
         if method not in chunking_functions:
             raise ValueError(f"Unknown method: {method}")
+        
+        
 
         # Call chunking function directly with ONLY the parameters used in RAGFlow
         chunks = chunking_functions[method](
@@ -129,7 +172,8 @@ class Manager:
             to_page=to_page,
             lang=language,
             callback=self.progress_callback,
-            parser_config=parser_config
+            parser_config=parser_config,
+            # kb_id=self.kb_id
         )
 
         print(f"✅ Generated {len(chunks)} chunks")
@@ -183,6 +227,14 @@ class Manager:
         formatted_chunks=[]
         for i,chunk in enumerate (chunks):
             content=chunk.get("content_with_weight","")
+            if not content:
+                content_tokens = chunk.get("content_tks", [])
+                content = "".join(content_tokens)
+
+            # If content is still empty, skip this chunk to avoid empty records
+            if not content.strip():
+                continue
+
             chunk_hash=hashlib.sha256(content.encode('utf-8')).hexdigest()
             new_chunk={
                 "content":content,

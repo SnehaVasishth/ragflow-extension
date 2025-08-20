@@ -9,3 +9,4 @@ class RawFlowProcessChunks(BaseModel):
     chunkingTokenSize:str = None
     chunkingLayout:str = None
     outputFile:str = None
+    # kb_id:str
