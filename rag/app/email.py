@@ -55,32 +55,67 @@ def chunk(
     else:
         msg = BytesParser(policy=policy.default).parse(open(filename, "rb"))
 
-    text_txt, html_txt = [], []
-    # get the email header info
-    for header, value in msg.items():
-        text_txt.append(f"{header}: {value}")
+    # text_txt, html_txt = [], []
+    # # get the email header info
+    # for header, value in msg.items():
+    #     text_txt.append(f"{header}: {value}")
 
-    #  get the email main info
-    def _add_content(msg, content_type):
-        if content_type == "text/plain":
-            text_txt.append(
-                msg.get_payload(decode=True).decode(msg.get_content_charset())
-            )
+    # #  get the email main info
+    # def _add_content(msg, content_type):
+    #     if content_type == "text/plain":
+    #         text_txt.append(
+    #             msg.get_payload(decode=True).decode(msg.get_content_charset())
+    #         )
+    #     elif content_type == "text/html":
+    #         html_txt.append(
+    #             msg.get_payload(decode=True).decode(msg.get_content_charset())
+    #         )
+    #     elif "multipart" in content_type:
+    #         if msg.is_multipart():
+    #             for part in msg.iter_parts():
+    #                 _add_content(part, part.get_content_type())
+
+    # _add_content(msg, msg.get_content_type())
+
+    # sections = TxtParser.parser_txt("\n".join(text_txt)) + [
+    #     (line, "") for line in HtmlParser.parser_txt("\n".join(html_txt)) if line
+    # ]
+    body_text = ""
+    html_text = ""
+
+    # Yeh helper function ab sirf body aur html part ko nikalega
+    def _get_body_content(msg_part):
+        nonlocal body_text, html_text
+        content_type = msg_part.get_content_type()
+        if msg_part.is_multipart():
+            for sub_part in msg_part.iter_parts():
+                _get_body_content(sub_part)
+        elif content_type == "text/plain":
+            try:
+                body_text += msg_part.get_payload(decode=True).decode(msg_part.get_content_charset())
+            except Exception as e:
+                logging.warning(f"Could not decode email text part: {e}")
         elif content_type == "text/html":
-            html_txt.append(
-                msg.get_payload(decode=True).decode(msg.get_content_charset())
-            )
-        elif "multipart" in content_type:
-            if msg.is_multipart():
-                for part in msg.iter_parts():
-                    _add_content(part, part.get_content_type())
+            try:
+                html_text += msg_part.get_payload(decode=True).decode(msg_part.get_content_charset())
+            except Exception as e:
+                logging.warning(f"Could not decode email html part: {e}")
 
-    _add_content(msg, msg.get_content_type())
+    _get_body_content(msg)
 
-    sections = TxtParser.parser_txt("\n".join(text_txt)) + [
-        (line, "") for line in HtmlParser.parser_txt("\n".join(html_txt)) if line
-    ]
+    # Step 2: HTML part (agar hai) ko plain text mein convert karke body ke saath jodenge.
+    full_body_text = body_text
+    if html_text.strip():
+        html_as_text = "\n".join(HtmlParser.parser_txt(html_text))
+        full_body_text += "\n" + html_as_text
 
+    if not full_body_text.strip():
+        raise ValueError("Document is empty: No text body found in the EML file.")
+
+    # Step 3: Ab hum TxtParser aur naive_merge ko headers ki "khichdi" ke bajaye
+    # sirf saaf body text denge.
+    sections = TxtParser.parser_txt(full_body_text)
+    
     st = timer()
     chunks = naive_merge(
         sections,

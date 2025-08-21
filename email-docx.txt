@@ -1,0 +1,25 @@
+[
+  {
+    "docnm_kwd": "f01ada06-4e2f-4bb3-a8a0-579a7424bc36.eml",
+    "title_tks": "f01ada06 4e2f 4bb3 a8a0 579a7424bc36",
+    "title_sm_tks": "f01ada06 4e2f 4bb3 a8a0 579a7424bc36",
+    "page_num_int": [
+      2
+    ],
+    "position_int": [
+      [
+        2,
+        1,
+        1,
+        1,
+        1
+      ]
+    ],
+    "top_int": [
+      1
+    ],
+    "content_with_weight": "Sneha vasishth, complete your scholarship application at UPES1 messagePriya <info@study.selfstudys.com>\tWed, Aug 20, 2025 at 4:27 PM Reply-To: hello@selfstudys.comTo: Sneha vasishth <snehavasishth03@gmail.com>Hi Sneha vasishth,UPES Dehradun (2025) is now accepting applications for the upcoming academic session. Students who apply may qualify for scholarship opportunities based on their academic credentials. Application forms are available online.For any scholarship enquiries : upes.ac.in/scholarship_formKey Highlights:91% successful placement rate  Highest package: 1.3 Cr590+ Recruiters on Campus*Start Your Scholarship Application© 2024 UPES UniversityEnergy Acres, VPO Bidholi via Prem Nagar, Dehradun, Uttarakhand - 248007You received this email because you are registered on Selfstudys with the email address: snehavasishth03@gmail.comWe respect your privacy. If you believe this has been sent to you in error, please safely unsubscribe here.",
+    "content_ltks": "sneha vasishth complet your scholarship applic at upes1 messagepriya info studi selfstudi com wed aug 20 2025 at 4 27 pm repli to hello selfstudi comto sneha vasishth snehavasishth03 gmail com hi sneha vasishth upe dehradun 2025 is now accept applic for the upcom academ session student who appli may qualifi for scholarship opportun base on their academ credenti applic form are avail onlin for ani scholarship enquiri upe ac in scholarship _ formkey highlight 91 success placement rate highest packag 13 cr590 recruit on campu start your scholarship applic 2024 upe universityenergi acr vpo bidholi via prem nagar dehradun uttarakhand 248007you receiv thi email becaus you are regist on selfstudi with the email address snehavasishth03 gmail comw respect your privaci if you believ thi ha been sent to you in error pleas safe unsubscrib here",
+    "content_sm_ltks": "sneha vasishth complet your scholarship applic at upes1 messagepriya info studi selfstudi com wed aug 20 2025 at 4 27 pm repli to hello selfstudi comto sneha vasishth snehavasishth03 gmail com hi sneha vasishth upe dehradun 2025 is now accept applic for the upcom academ session student who appli may qualifi for scholarship opportun base on their academ credenti applic form are avail onlin for ani scholarship enquiri upe ac in scholarship _ formkey highlight 91 success placement rate highest packag 13 cr590 recruit on campu start your scholarship applic 2024 upe universityenergi acr vpo bidholi via prem nagar dehradun uttarakhand 248007you receiv thi email becaus you are regist on selfstudi with the email address snehavasishth03 gmail comw respect your privaci if you believ thi ha been sent to you in error pleas safe unsubscrib here"
+  }
+]

@@ -12,6 +12,16 @@ from app.utils.logger import logger
 from app.common.constants import STATUS_TYPES
 from app.config.main import Config
 
+# Required imports for the functions
+import sys
+import os
+import re
+import json
+import time
+import hashlib
+from datetime import datetime, timezone
+
+# --- RAGFlow chunker imports ---
 from rag.app.paper import chunk as paper_chunk
 from rag.app.naive import chunk as naive_chunk
 from rag.app.book import chunk as book_chunk
@@ -26,14 +36,9 @@ from rag.app.one import chunk as one_chunk
 from rag.app.email import chunk as email_chunk
 from rag.app.tag import chunk as tag_chunk
 
+# Import necessary for the conversion function
+from deepdoc.parser.pdf_parser import RAGFlowPdfParser
 
-import sys
-import os
-import re
-import json
-import time
-import hashlib
-from email.message import EmailMessage
 
 class Manager:
 
@@ -41,59 +46,79 @@ class Manager:
         if data.tenantId is None:
             raise HTTPException(status_code=400, detail="Tenant ID not provided in request")
         self.request = request
-
         self.data = data
         self.method = data.chunkingMethod if data.chunkingMethod else "naive"
         self.tokens = data.chunkingTokenSize if data.chunkingTokenSize else 512
         self.layout = data.chunkingLayout if data.chunkingLayout else "DeepDOC"
         self.output = data.outputFile if data.outputFile else None
         # self.kb_id=data.kb_id
-    def _convert_to_eml(self,original_filename,original_binary,callback):
-        text_chunks=one_chunk(filename=original_filename,binary=original_binary,callback=callback)
-        full_text="\n".join([c.get('content_with_weight','') for c in text_chunks])
-        from_addr=re.search(r"^\s*From\s*:\s*(.+)$", full_text, re.MULTILINE | re.IGNORECASE)
-        to_addr=re.search(r"^\s*To\s*:\s*(.+)$", full_text, re.MULTILINE | re.IGNORECASE)
-        subject=re.search(r"^\s*Subject\s*:\s*(.+)$", full_text, re.MULTILINE | re.IGNORECASE)
-        email_body=full_text
-        
-        try:
-            header_end_index=max(
-                (from_addr.end() if from_addr else -1),
-                (to_addr.end() if to_addr else -1),
-                (subject.end() if subject else -1)
-            )
-            if header_end_index!=-1:
-                body_start_index=full_text.find('\n\n',header_end_index)
-                
-                if body_start_index !=-1:
-                    email_body=full_text[body_start_index:].strip()
-        
-        except Exception:
-            pass
-        
-        msg=EmailMessage()
-        msg['Subject']= subject.group(1).strip() if subject else f"Converted: {original_filename}"
-        msg['From']= from_addr.group(1).strip() if from_addr else "sender@example.com"
-        msg['To']= to_addr.group(1).strip() if to_addr else "receiver@example.com"
-        msg.set_content(email_body, charset='utf-8')
-        
-        new_eml_filename= os.path.splitext(original_filename)[0] + ".eml"
-        eml_binary= msg.as_bytes()
-        print(f"✅ Conversion complete. New file: {new_eml_filename}")
-        return new_eml_filename,eml_binary
+    
+    def _convert_to_eml(self, original_filename, original_binary, callback):
+        """
+        Converts any document to a clean, plain-text .eml file that the 
+        original email.py can process correctly.
+        """
+        # Step 1: Reliably extract the full text from the source document.
+        # The output may or may not contain special '@@...##' tags.
+        text_chunks = one_chunk(
+            filename=original_filename,
+            binary=original_binary,
+            callback=callback
+        )
+        full_text_with_tags = "\n".join([c.get('content_with_weight', '') for c in text_chunks])
 
-        
+        if not full_text_with_tags.strip():
+            raise ValueError("Failed to extract any text from the document.")
 
+        # Step 2: Create a final, clean plain-text version by removing any tags.
+        plain_text = RAGFlowPdfParser.remove_tag(full_text_with_tags)
+
+        # Step 3: Intelligently find the original headers and the true email body
+        # within the clean, plain text.
+        from_addr = re.search(r"^\s*From\s*:\s*(.+)$", plain_text, re.MULTILINE | re.IGNORECASE)
+        to_addr = re.search(r"^\s*To\s*:\s*(.+)$", plain_text, re.MULTILINE | re.IGNORECASE)
+        subject = re.search(r"^\s*Subject\s*:\s*(.+)$", plain_text, re.MULTILINE | re.IGNORECASE)
+
+        email_body = plain_text
+        header_end_index = max(
+            (from_addr.end() if from_addr else -1),
+            (to_addr.end() if to_addr else -1),
+            (subject.end() if subject else -1)
+        )
+        if header_end_index != -1:
+            body_start_index = plain_text.find('\n\n', header_end_index)
+            if body_start_index != -1:
+                email_body = plain_text[body_start_index:].strip()
+        
+        # Step 4: Use the extracted headers (or defaults) to build a clean EML file.
+        from_email = from_addr.group(1).strip() if from_addr else "sender@example.com"
+        to_email = to_addr.group(1).strip() if to_addr else "receiver@example.com"
+        subject_text = subject.group(1).strip() if subject else f"Converted: {original_filename}"
+
+        # Manually construct the raw EML content with ONLY the plain text body.
+        eml_content = f"""From: {from_email}
+To: {to_email}
+Subject: {subject_text}
+Date: {datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S %z')}
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+{email_body}"""
+
+        # Step 5: Encode the clean string to binary and return it.
+        new_eml_filename = os.path.splitext(original_filename)[0] + ".eml"
+        eml_binary = eml_content.encode('utf-8')
+
+        print(f"✅ Final, simple EML conversion complete. New file: {new_eml_filename}")
+        return new_eml_filename, eml_binary
 
     async def process_chunks(self):        
         try:
-
-            # Create a temporary file path
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 temp_file_path = temp_file.name + self.data.s3URL
 
             print(temp_file_path, self.data.s3URL)
-            # Download file from S3 using download_file_from_s3
             download_file_from_s3(temp_file_path, self.data.s3URL)
 
             chunks = self.main(temp_file_path)
@@ -117,19 +142,16 @@ class Manager:
             print(f"Status: {msg}")
 
     def extract_chunks(self, pdf_path, method="naive", token_size=512, layout="DeepDOC",
-                    from_page=0, to_page=100000, language="English"):
+                       from_page=0, to_page=100000, language="English"):
         """Extract chunks directly using RAGFlow chunking methods"""
-        # Read PDF
         with open(pdf_path, 'rb') as f:
             binary = f.read()
 
         filename = os.path.basename(pdf_path)
         
         if method == 'email':
-            filename,binary= self._convert_to_eml(filename,binary,callback=self.progress_callback)
+            filename,binary = self._convert_to_eml(filename,binary,callback=self.progress_callback)
 
-        # Create config - ONLY using parameters that exist in RAGFlow code
-        # These are the only parameters used in paper.py line 147-150
         parser_config = {
             "chunk_token_num": token_size,
             "delimiter": "\n!?。；！？",
@@ -140,31 +162,25 @@ class Manager:
         print(f"🔧 Method: {method}")
         print(f"⚙️ Config: {parser_config}")
 
-        # Get chunking function
         chunking_functions = {
             "paper": paper_chunk,
             "naive": naive_chunk,
             "book": book_chunk,
             "laws": laws_chunk,
             "manual": manual_chunk,
-            "presentation":ppt_chunk,
-            "email":email_chunk,
-            "one":one_chunk,
-            "qa":qa_chunk,
-            "tag":tag_chunk,
-            "table":table_chunk,
-            "resume":resume_chunk,
-            "picture":pic_chunk,        
-            
-            
+            "presentation": ppt_chunk,
+            "email": email_chunk,
+            "one": one_chunk,
+            "qa": qa_chunk,
+            "tag": tag_chunk,
+            "table": table_chunk,
+            "resume": resume_chunk,
+            "picture": pic_chunk,        
         }
 
         if method not in chunking_functions:
             raise ValueError(f"Unknown method: {method}")
         
-        
-
-        # Call chunking function directly with ONLY the parameters used in RAGFlow
         chunks = chunking_functions[method](
             filename=filename,
             binary=binary,
@@ -173,7 +189,6 @@ class Manager:
             lang=language,
             callback=self.progress_callback,
             parser_config=parser_config,
-            # kb_id=self.kb_id
         )
 
         print(f"✅ Generated {len(chunks)} chunks")
@@ -181,7 +196,6 @@ class Manager:
 
     def save_chunks(self, chunks, output_file):
         """Save chunks to JSON"""
-        # Make chunks serializable
         serializable_chunks = []
         for chunk in chunks:
             if isinstance(chunk, dict):
@@ -195,7 +209,6 @@ class Manager:
             else:
                 serializable_chunks.append(str(chunk))
 
-        # Save to file
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(serializable_chunks, f, indent=2, ensure_ascii=False)
 
@@ -203,12 +216,11 @@ class Manager:
 
     def main(self, file_path):
         """Main function"""
-       
+        
         if not os.path.exists(file_path):
             print(f"❌ File not found: {file_path}")
             return
 
-        # Extract chunks
         chunks = self.extract_chunks(
             pdf_path= file_path,
             method=self.method,
@@ -216,7 +228,6 @@ class Manager:
             layout=self.layout
         )
 
-        # Save chunks
         if self.output:
             output_file = self.output
         else:
@@ -231,7 +242,6 @@ class Manager:
                 content_tokens = chunk.get("content_tks", [])
                 content = "".join(content_tokens)
 
-            # If content is still empty, skip this chunk to avoid empty records
             if not content.strip():
                 continue
 
@@ -252,5 +262,4 @@ class Manager:
             }
             formatted_chunks.append(new_chunk)
         
-
         return formatted_chunks
